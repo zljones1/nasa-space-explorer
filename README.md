@@ -1,11 +1,24 @@
-# Project 7: NASA API - Space Explorer App
-NASA releases a new "Astronomy Picture of the Day" (APOD) every day—spotlighting breathtaking images of galaxies, stars, planets, and more.
+# NASA Space Explorer 🚀
 
-Your task is to build an interactive web app that fetches and displays these photos using [NASA's API](https://api.nasa.gov/). Users will pick a date range and instantly view stunning photos from across the cosmos, along with titles and descriptions.
+My space photo gallery built with NASA's Astronomy Picture of the Day (APOD) API, using vanilla HTML, CSS and JavaScript.
 
-You'll get to use your skills to build something that's actually connected to real-world data from one of the most iconic organizations in the world.
+**Live site:** https://zljones1.github.io/nasa-space-explorer/
 
-## Starter Files
-- The provided files include a NASA logo, date inputs, a button, a placeholder for your gallery, and basic layout and styling to help you get started.
-- It also includes built-in logic (in `dateRange.js`) to handle the valid APOD date range—from June 16, 1995 to today. No need to modify it.
-- All your custom JavaScript should go in `script.js`. That's where you'll write the code that fetches data and displays your gallery.
+## Features
+- Pick a start date and the app gets **9 days in a row** of APOD pictures from NASA's API
+- Gallery cards show each image, title and date
+- Click a card to open a modal with the full-size image, title, date and explanation
+- Video entries show a thumbnail and play embedded in the modal (or open with a link)
+- Loading message while the data loads
+- A random "Did You Know?" space fact on every page load
+- Smooth hover zoom on gallery images
+- NASA colors (blue #0B3D91, red #FC3D21) and fonts (Inter and Public Sans)
+
+## How it works
+`dateRange.js` sets up the date pickers (June 16, 1995 to today, end date = start + 8 days). `script.js` calls `https://api.nasa.gov/planetary/apod` with `start_date`, `end_date` and `thumbs=true`, then builds the gallery from the JSON it gets back.
+
+## API key
+The key is in `const API_KEY` at the top of `js/script.js`. It's set to `DEMO_KEY`, which NASA rate-limits, so get your own free key at https://api.nasa.gov and paste it in.
+
+## NASA feed fallback
+In late 2026, NASA's APOD feed started returning placeholder entries (all titled "NASA Science" with the NASA logo) after APOD moved to science.nasa.gov. If the app detects that, or if the request fails or is rate-limited, it loads the course's backup APOD data instead and shows a small notice. Old apod.nasa.gov image links in the backup load from the Internet Archive.

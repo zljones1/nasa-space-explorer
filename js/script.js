@@ -1,10 +1,11 @@
 // ===== SETTINGS =====
-// NASA's live APOD API (https://api.nasa.gov/planetary/apod) is currently
-// returning NASA-logo placeholders instead of real photos, so this app uses
-// the course's backup copy of APOD data instead. It needs no API key.
-// (If the live API is fixed later, you could switch back with your own key:
-//  const API_KEY = 'YOUR_KEY_FROM_api.nasa.gov';)
-const DATA_URL = 'https://cdn.jsdelivr.net/gh/GCA-Classroom/apod/data.json';
+// 🔑 API KEY: paste your own free key from https://api.nasa.gov here.
+// DEMO_KEY works for testing, but NASA limits it to about 30 requests per hour.
+const API_KEY = 'DEMO_KEY';
+const API_URL = 'https://api.nasa.gov/planetary/apod';
+
+// Backup data from the course. We only use this if NASA's live feed is down.
+const BACKUP_URL = 'https://cdn.jsdelivr.net/gh/GCA-Classroom/apod/data.json';
 
 // Find our date picker inputs on the page
 const startInput = document.getElementById('startDate');
@@ -14,40 +15,8 @@ const endInput = document.getElementById('endDate');
 // This sets up the date pickers to:
 // - Default to a range of 9 days (from 9 days ago to today)
 // - Restrict dates to NASA's image archive (starting from 1995)
+// - Keep the end date 8 days after the start, so we always ask for 9 days in a row
 setupDateInputs(startInput, endInput);
-
-// The backup data file only covers certain dates (not every day up to today),
-// so the starter's default "last 9 days" would show nothing. After the data
-// loads, we limit the pickers to the dates the file actually has and select
-// the whole range, so the default view always shows pictures.
-let allEntries = []; // every entry from the data file, saved after the first fetch
-
-async function loadData() {
-  const response = await fetch(DATA_URL);
-  if (!response.ok) {
-    throw new Error(`The data file returned an error (status ${response.status}).`);
-  }
-  return response.json();
-}
-
-async function setDefaultRange() {
-  try {
-    allEntries = await loadData();
-    // Dates are "YYYY-MM-DD" text, so sorting them alphabetically also sorts by date
-    const dates = allEntries.map((item) => item.date).sort();
-    const first = dates[0];
-    const last = dates[dates.length - 1];
-    [startInput, endInput].forEach((input) => {
-      input.min = first;
-      input.max = last;
-    });
-    startInput.value = first;
-    endInput.value = last;
-  } catch (error) {
-    // If this fails, clicking the button will try again and show the error
-  }
-}
-setDefaultRange();
 
 // Other page elements we need
 const button = document.getElementById('getImagesBtn');
@@ -74,37 +43,73 @@ document.getElementById('factText').textContent =
   facts[Math.floor(Math.random() * facts.length)];
 
 // ===== FETCH IMAGES =====
-// When the button is clicked, show every picture between the two dates.
+const notice = document.getElementById('notice');
 button.addEventListener('click', getSpaceImages);
 
+// Ask NASA's live API for every picture from the start date to the end date
+async function fetchFromNasa(start, end) {
+  const url = `${API_URL}?api_key=${API_KEY}&start_date=${start}&end_date=${end}&thumbs=true`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    // 429 means the API key hit its rate limit
+    throw new Error(`NASA API error (status ${response.status})`);
+  }
+  return response.json();
+}
+
+// NASA's feed sometimes sends back "placeholder" entries: every item is titled
+// "NASA Science" and the picture is just the NASA logo. This checks for that.
+function isPlaceholder(items) {
+  return items.length === 0 || items.every((item) =>
+    item.title === 'NASA Science' || (item.url || '').includes('nasa-logo'));
+}
+
+// Load the course backup file and pick entries in the chosen dates.
+// If none match, show all of the backup entries so the gallery is never empty.
+async function fetchBackup(start, end) {
+  const response = await fetch(BACKUP_URL);
+  if (!response.ok) throw new Error(`Backup data error (status ${response.status})`);
+  const all = await response.json();
+  const inRange = all.filter((item) => item.date >= start && item.date <= end);
+  return inRange.length > 0 ? inRange : all;
+}
+
 async function getSpaceImages() {
-  // Show a loading message while the data loads
+  // 1. Show the loading message BEFORE we start fetching
   gallery.innerHTML = '<p class="loading">🔄 Loading space photos…</p>';
+  notice.hidden = true;
   button.disabled = true;
 
+  let start = startInput.value;
+  let end = endInput.value;
+  if (start > end) [start, end] = [end, start]; // fix dates picked backwards
+
   try {
-    // Download the data file (only once - after that we reuse the saved copy)
-    if (allEntries.length === 0) {
-      allEntries = await loadData();
+    let items;
+    try {
+      // 2. Try NASA's live API first
+      items = await fetchFromNasa(start, end);
+      if (isPlaceholder(items)) throw new Error('NASA sent placeholder data');
+    } catch (liveError) {
+      // 3. Live feed is down or rate-limited, so use the backup data instead
+      console.warn('Using backup data:', liveError.message);
+      items = await fetchBackup(start, end);
+      notice.textContent = '🛰️ NASA\'s live picture feed is down right now, so you\'re seeing backup APOD photos from the course archive.';
+      notice.hidden = false;
     }
 
-    // Make sure the start date isn't after the end date
-    let start = startInput.value;
-    let end = endInput.value;
-    if (start > end) [start, end] = [end, start];
-
-    // Keep only the entries between the two dates (including both ends)
-    const matches = allEntries.filter((item) => item.date >= start && item.date <= end);
-
-    // Show newest pictures first
-    matches.sort((a, b) => b.date.localeCompare(a.date));
-    showGallery(matches);
+    // 4. Show newest first, then build the gallery (this replaces the loading message)
+    items.sort((a, b) => b.date.localeCompare(a.date));
+    showGallery(items);
   } catch (error) {
-    gallery.innerHTML = `<p class="error">⚠️ Couldn't load images. ${error.message} Please try again.</p>`;
+    gallery.innerHTML = `<p class="error">⚠️ Couldn't load images. ${error.message}. Please try again.</p>`;
   } finally {
     button.disabled = false;
   }
 }
+
+// Load the default 9 days as soon as the page opens
+getSpaceImages();
 
 // ===== BUILD THE GALLERY =====
 // Create one card for each matching entry.
@@ -112,7 +117,7 @@ function showGallery(items) {
   gallery.innerHTML = '';
 
   if (items.length === 0) {
-    gallery.innerHTML = '<p class="error">No images found for those dates. Try a range between ' + startInput.min + ' and ' + startInput.max + '.</p>';
+    gallery.innerHTML = '<p class="error">No images found for those dates.</p>';
     return;
   }
 
