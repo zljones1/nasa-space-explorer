@@ -90,6 +90,9 @@ async function getSpaceImages() {
       // 2. Try NASA's live API first
       items = await fetchFromNasa(start, end);
       if (isPlaceholder(items)) throw new Error('NASA sent placeholder data');
+      // Drop any single placeholder entries mixed in with real ones
+      items = items.filter((item) =>
+        item.title !== 'NASA Science' && !(item.url || '').includes('nasa-logo'));
     } catch (liveError) {
       // 3. Live feed is down or rate-limited, so use the backup data instead
       console.warn('Using backup data:', liveError.message);
